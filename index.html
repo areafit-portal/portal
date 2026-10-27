@@ -383,7 +383,7 @@
       const c = curDoc(t.tipo);
       return '<div class="card docrow"><div style="display:flex;align-items:center;gap:8px"><b style="flex:1">' + esc(t.nombre) + '</b>' + (c ? DOC_PILL[c.estado] || '' : '<span class="pill off">Falta</span>') + '</div>' +
         (c && c.estado === 'RECHAZADO' ? '<div class="small" style="color:var(--err);margin-top:4px">Motivo: ' + esc(c.motivo) + '</div>' : '') +
-        (t.tipo === 'DELITOS' && !c ? '<div class="small muted" style="margin-top:4px">Se pide gratis en sede.mjusticia.gob.es con certificado digital o Cl@ve.</div>' : '') +
+        (t.ayuda && (!c || c.estado === 'RECHAZADO') ? '<div class="small muted" style="margin-top:4px">' + esc(t.ayuda) + '</div>' : '') +
         '<div style="display:flex;gap:8px;margin-top:10px">' + (c ? '<button class="btn sm" type="button" data-act="viewDoc" data-id="' + esc(c.id) + '">Ver</button>' : '') +
         (!c || c.estado !== 'VALIDO' ? '<label class="btn sm' + (!c || c.estado === 'RECHAZADO' ? ' primary' : '') + '" style="cursor:pointer">' + (c ? 'Volver a subir' : 'Subir foto o PDF') + '<input type="file" accept="image/*,application/pdf" data-on="docUp" data-tipo="' + t.tipo + '" style="display:none"></label>' : '') +
         '</div></div>';
@@ -396,7 +396,7 @@
       '<div class="row3"><label class="field"><span>C. postal</span><input class="input" id="pdCp" value="' + esc(me.cp || '') + '" inputmode="numeric" maxlength="5" autocomplete="postal-code"></label>' +
       '<label class="field" style="grid-column:span 2"><span>Localidad</span><input class="input" id="pdLoc" value="' + esc(me.localidad || '') + '"></label></div>' +
       '<label class="field"><span>Provincia</span><input class="input" id="pdProv" value="' + esc(me.provincia || '') + '"></label>' +
-      '<label class="field"><span>Nº de la Seguridad Social</span><input class="input" id="pdNss" value="' + esc(me.nss || '') + '" inputmode="numeric" placeholder="12 números"></label>' +
+      '<label class="field"><span>Nº de afiliación a la Seguridad Social</span><input class="input" id="pdNss" value="' + esc(me.nss || '') + '" inputmode="numeric" placeholder="12 números"></label>' +
       '<label class="field"><span>IBAN (tu cuenta para la nómina)</span><input class="input" id="pdIban" value="' + esc(fmtIban(me.iban || '')) + '" style="text-transform:uppercase" placeholder="ES00 0000 0000 0000 0000 0000" data-on="pdIban" autocomplete="off"></label>' +
       '<div id="pdTit" class="field hidden"><span>Certificado de titularidad de la cuenta nueva <b class="req">obligatorio</b></span>' +
       '<label class="filebtn"><input type="file" id="pdTitFile" accept="image/*,application/pdf" data-on="pdTit"><span class="fic" aria-hidden="true">📎</span><span id="pdTitName">Hacer una foto o elegir un archivo</span></label></div>' +
