@@ -115,6 +115,8 @@
   'use strict';
   // En Google la página trae el acceso; en GitHub Pages viene en la dirección (?acceso=…)
   const ACCESO = (function () { const inj = ""; if (inj) return inj; try { return new URLSearchParams(location.search).get('acceso') || ''; } catch (e) { return ''; } })();
+  // Botón del correo del horario (?horario=…): entra y abre esa semana
+  const HORARIO = (function () { try { return new URLSearchParams(location.search).get('horario') || ''; } catch (e) { return ''; } })();
   const API_URL = 'https://script.google.com/macros/s/AKfycbxBbu2GGhQxx75GAQgmWy07ZCYj7QaQ9SD_BHPmIoQIWOk7Fbtsszuef9C0v-8OjNg/exec';
   const IN_GOOGLE = !!(window.google && google.script && google.script.run);
   const KEY = 'gh_portal_sesion';
@@ -535,7 +537,16 @@
 
   /* ---------- Acciones ---------- */
   async function refresh(quiet) {
-    try { S.d = await call('portalData', S.sesion); render(); }
+    try {
+      S.d = await call('portalData', S.sesion);
+      if (S.d.sesion) { S.sesion = S.d.sesion; store(KEY, S.d.sesion); } // se renueva sola cada vez que entra
+      if (S.openWeek) {
+        const h = (S.d.horarios || []).find((x) => x.anio === S.openWeek.anio && x.semana === S.openWeek.semana);
+        S.openWeek = null;
+        if (h) { S.week = h.id; S.view = 'semana'; }
+      }
+      render();
+    }
     catch (e) { if (!quiet) fail(e); else fail(e); }
   }
   const ACT = {
@@ -721,6 +732,17 @@
         S.sesion = r.sesion; store(KEY, r.sesion);
         try { if (IN_GOOGLE) google.script.history.replace(null, { portal: '1' }); else history.replaceState(null, '', location.pathname); } catch (e) { /* no pasa nada */ }
       } catch (e) { renderLogin(msg(e)); return; }
+    } else if (HORARIO) {
+      try {
+        const r = await call('portalOpenHorario', HORARIO);
+        S.sesion = r.sesion; store(KEY, r.sesion);
+        S.openWeek = { anio: r.anio, semana: r.semana };
+      } catch (e) {
+        // Si el botón ha caducado pero ya tenía la sesión abierta en este navegador, entra igual
+        S.sesion = load(KEY);
+        if (!S.sesion) { try { history.replaceState(null, '', location.pathname); } catch (er) { /* nada */ } renderLogin(msg(e).replace(/^CADUCADO:\s*/, '')); return; }
+      }
+      try { history.replaceState(null, '', location.pathname); } catch (e) { /* no pasa nada */ }
     } else S.sesion = load(KEY);
     if (!S.sesion) { renderLogin(); return; }
     refresh();
