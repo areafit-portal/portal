@@ -64,6 +64,8 @@
   .dayh { display: flex; align-items: baseline; justify-content: space-between; margin: 12px 0 2px; }
   .dayh b { font-size: 14px; } .dayh span { font-size: 12px; color: var(--muted); }
   .free { font-size: 13px; color: var(--ok); padding: 6px 0; }
+  .festd { font-size: 13px; background: #FFF1B8; color: #6B4E00; border-radius: 8px; padding: 7px 10px; margin: 4px 0; }
+  .pfest { display: inline-block; background: #E0A800; color: #14181F; font-size: 11px; font-weight: 700; border-radius: 6px; padding: 1px 7px; margin-left: 6px; }
   .kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
   .kpi { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
   .kpi span { display: block; font-size: 12px; color: var(--muted); } .kpi b { font-size: 24px; } .kpi small { font-size: 13px; color: var(--muted); font-weight: 500; }
@@ -157,6 +159,7 @@
     const map = {};
     (S.d.horarios || []).forEach((w) => {
       (w.items || []).forEach((it) => {
+        if (it[1] < 0) return; // marca de día festivo
         const k = iso(dayOfWeek(w.anio, w.semana, it[0]));
         (map[k] = map[k] || []).push({ a: it[1], b: it[2], n: it[3], c: it[4] });
       });
@@ -168,13 +171,15 @@
     return list.map((s) => '<div class="shift"><span class="sbar" style="background:' + esc(s.c || '#9AA4B1') + '"></span><span class="stime">' + t2(s.a) + ' – ' + t2(s.b) + '</span><span class="swhat">' + esc(s.n) + '</span></div>').join('');
   }
   function weekDays(w) {
-    const by = [[], [], [], [], [], [], []];
-    (w.items || []).forEach((it) => by[it[0]].push({ a: it[1], b: it[2], n: it[3], c: it[4] }));
+    const by = [[], [], [], [], [], [], []], fest = {};
+    (w.items || []).forEach((it) => { if (it[1] < 0) fest[it[0]] = it[3]; else by[it[0]].push({ a: it[1], b: it[2], n: it[3], c: it[4] }); });
     return by.map((l, d) => {
       const dt = dayOfWeek(w.anio, w.semana, d);
       const h = l.reduce((t, s) => t + (s.b - s.a) / 60, 0);
-      return '<div class="dayh"><b>' + DIAS[d] + ' ' + dt.getDate() + '</b><span>' + (h ? fmtH(h) + ' h' : '') + '</span></div>' +
-        (l.length ? shiftRows(l.sort((x, y) => x.a - y.a)) : '<div class="free">Libre</div>');
+      const f = fest[d];
+      return '<div class="dayh"><b>' + DIAS[d] + ' ' + dt.getDate() + (f ? '<span class="pfest">Festivo</span>' : '') + '</b><span>' + (h ? fmtH(h) + ' h' : '') + '</span></div>' +
+        (f ? '<div class="festd">' + esc(f) + (l.length ? '. Vienes a trabajar: estas horas se te pagan aparte como horas festivas.' : ': no vienes, descansa.') + '</div>' : '') +
+        (l.length ? shiftRows(l.sort((x, y) => x.a - y.a)) : (f ? '' : '<div class="free">Libre</div>'));
     }).join('');
   }
 
