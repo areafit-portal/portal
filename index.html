@@ -208,13 +208,13 @@
   }
 
   /* ---------- Menú ---------- */
-  const NAV = [['inicio', '⌂', 'Inicio'], ['horario', '▦', 'Mi horario'], ['ausencias', '✈', 'Vacaciones y permisos'], ['docs', '🗂', 'Mi documentación'], ['datos', '☺', 'Mis datos'], ['ropa', '👕', 'Ropa y EPIs']];
+  const NAV = [['inicio', '⌂', 'Inicio'], ['horario', '▦', 'Mi horario'], ['ausencias', '✈', 'Vacaciones y permisos'], ['docs', '🗂', 'Mi documentación'], ['nominas', '€', 'Mis nóminas'], ['datos', '☺', 'Mis datos'], ['ropa', '👕', 'Ropa y EPIs']];
   function docsPending() { const r = S.d && S.d.docs ? S.d.docs.resumen : null; return r ? r.docs.length + (r.datos.length ? 1 : 0) + r.firmar : 0; }
   function renderDrawer() {
     const me = S.d.me, sinFirmar = (S.d.horarios || []).filter((w) => !w.firmado).length;
     $('#drawer').innerHTML = '<div class="dhead"><b>' + esc(me.nombre + ' ' + me.apellido1) + '</b><span>' + esc(me.centro) + ' · ' + esc(me.codigo) + '</span></div>' +
       '<div class="dnav">' + NAV.map((n) => '<button type="button" data-act="go" data-v="' + n[0] + '" class="' + (S.view === n[0] ? 'on' : '') + '"><span class="ic" aria-hidden="true">' + n[1] + '</span>' + n[2] +
-        (n[0] === 'horario' && sinFirmar ? '<span class="badge">' + sinFirmar + '</span>' : '') + (n[0] === 'docs' && docsPending() ? '<span class="badge">' + docsPending() + '</span>' : '') + '</button>').join('') + '</div>' +
+        (n[0] === 'horario' && sinFirmar ? '<span class="badge">' + sinFirmar + '</span>' : '') + (n[0] === 'docs' && docsPending() ? '<span class="badge">' + docsPending() + '</span>' : '') + (n[0] === 'nominas' && nomNuevas().length ? '<span class="badge">' + nomNuevas().length + '</span>' : '') + '</button>').join('') + '</div>' +
       '<div class="dfoot"><div class="dnav" style="padding:0"><button type="button" data-act="logout"><span class="ic" aria-hidden="true">⎋</span>Cerrar sesión</button></div></div>';
   }
   function menu(on) { document.body.classList.toggle('menu', on); }
@@ -224,7 +224,7 @@
     if (!S.d) return;
     $('#burger').classList.remove('hidden');
     renderDrawer();
-    const v = { inicio: vInicio, horario: vHorario, semana: vSemana, ausencias: vAusencias, pedir: vPedir, datos: vDatos, ropa: vRopa, docs: vDocs, firmar: vFirmar, verdoc: vVerDoc }[S.view] || vInicio;
+    const v = { inicio: vInicio, horario: vHorario, semana: vSemana, ausencias: vAusencias, pedir: vPedir, datos: vDatos, ropa: vRopa, docs: vDocs, firmar: vFirmar, verdoc: vVerDoc, nominas: vNominas, vernom: vVerNomina }[S.view] || vInicio;
     $('#view').innerHTML = v();
     window.scrollTo(0, 0);
   }
@@ -246,6 +246,7 @@
     if (dr && dr.firmar) h += '<button type="button" class="banner warn" style="display:block;width:100%;text-align:left;border:0;cursor:pointer" data-act="go" data-v="docs">Tienes <b>' + dr.firmar + ' documento' + (dr.firmar > 1 ? 's' : '') + ' para firmar</b>. Toca para leerlo y firmarlo ›</button>';
     if (dr && dr.rechazados.length) h += '<button type="button" class="banner err" style="display:block;width:100%;text-align:left;border:0;cursor:pointer" data-act="go" data-v="docs">Tienes que volver a subir: <b>' + esc(dr.rechazados.join(', ').toLowerCase()) + '</b> ›</button>';
     else if (dr && (dr.docs.length || dr.datos.length)) h += '<button type="button" class="banner info" style="display:block;width:100%;text-align:left;border:0;cursor:pointer" data-act="go" data-v="docs"><b>Completa tu alta</b>: ' + (dr.datos.length ? 'faltan datos personales' + (dr.docs.length ? ' y ' : '') : '') + (dr.docs.length ? dr.docs.length + ' documento' + (dr.docs.length > 1 ? 's' : '') : '') + '. Toca para completarla ›</button>';
+    nomNuevas().slice(0, 1).forEach((n) => { h += '<button type="button" class="banner info" style="display:block;width:100%;text-align:left;border:0;cursor:pointer" data-act="openNom" data-id="' + esc(n.id) + '">' + (n.actualizada ? 'Se ha <b>actualizado tu nómina de ' + nomMes(n) + '</b>' : 'Ya tienes tu <b>nómina de ' + nomMes(n) + '</b>') + '. Toca para verla ›</button>'; });
     sinFirmar.forEach((w) => { h += '<button type="button" class="banner warn" style="display:block;width:100%;text-align:left;border:0;cursor:pointer" data-act="openWeek" data-id="' + esc(w.id) + '">Tienes el horario de la <b>' + wtag(w.semana) + '</b> (' + weekRange(w.anio, w.semana) + ') sin firmar. Toca para verlo y firmarlo ›</button>'; });
     resueltas.forEach((s) => { const m = motivo(s.tipo); h += '<div class="banner ' + (s.estado === 'APROBADA' ? 'ok' : 'err') + '">' + (s.estado === 'APROBADA' ? 'Te han aprobado ' : 'No te han aprobado ') + esc(m.nombre.toLowerCase()) + ' (' + fdate(s.desde) + (s.hasta !== s.desde ? ' – ' + fdate(s.hasta) : '') + ').' + (s.comentario ? ' «' + esc(s.comentario) + '»' : '') + '</div>'; });
     if (hoy.length) h += '<div class="card"><div class="small muted" style="font-weight:600">Hoy</div>' + shiftRows(hoy) + '</div>';
@@ -414,6 +415,47 @@
     return h;
   }
   function fmtIban(v) { return String(v || '').replace(/\s+/g, '').toUpperCase().replace(/(.{4})/g, '$1 ').trim(); }
+
+  /* ---------- Mis nóminas ---------- */
+  const MESES_L = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+  function nomMes(n) { return MESES_L[n.mes - 1] + ' de ' + n.anio; }
+  function nomNuevas() { const N = S.d && S.d.nominas; return N ? N.lista.filter((n) => !n.consultada) : []; }
+  function eur(x) { return x === '' || x == null || isNaN(x) ? '' : Number(x).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €'; }
+  function vNominas() {
+    const N = (S.d && S.d.nominas) || { acepta: '', lista: [] };
+    let h = '<h1>Mis nóminas</h1>';
+    if (!N.acepta) {
+      return h + '<div class="card"><p style="margin:0 0 10px">Tus nóminas te llegan aquí, a tu portal. Cada mes te avisamos por correo cuando tengas la nueva, y puedes verla y descargarla cuando quieras.</p>' +
+        '<p class="small muted" style="margin:0 0 14px">La primera vez te pedimos que lo confirmes. Si prefieres recibirla en papel, díselo a la coordinación de tu centro.</p>' +
+        '<button class="btn primary block" type="button" data-act="nomAcepta" id="nomAcBtn">Acepto recibir mis nóminas en este portal</button></div>';
+    }
+    if (!N.lista.length) return h + '<div class="card muted">Todavía no tienes ninguna nómina aquí. Te llegará un correo cuando esté la primera.</div>';
+    let y = 0;
+    N.lista.forEach((n) => {
+      if (n.anio !== y) { y = n.anio; h += '<h2>' + y + '</h2>'; }
+      h += '<button type="button" class="list-item" data-act="openNom" data-id="' + esc(n.id) + '"><span class="grow"><b>' + esc(MESES_L[n.mes - 1].charAt(0).toUpperCase() + MESES_L[n.mes - 1].slice(1)) + '</b>' +
+        '<span class="small muted">' + (n.neto !== '' ? 'Líquido ' + eur(n.neto) : '') + (n.actualizada ? ' · corregida' : '') + '</span></span>' +
+        (n.consultada ? '' : '<span class="pill warn">Nueva</span>') + '<span class="chev" aria-hidden="true">›</span></button>';
+    });
+    return h + '<p class="small muted" style="margin-top:14px">Aceptaste recibirlas aquí el ' + esc(fdate(N.acepta)) + ' ' + esc(String(N.acepta).slice(0, 4)) + '.</p>';
+  }
+  function vVerNomina() {
+    const n = S.d.nominas.lista.find((x) => x.id === S.nomId);
+    if (!n) return vNominas();
+    setTimeout(async () => {
+      const box = $('#docBox'); if (!box) return;
+      try {
+        if (!S.nomFile || S.nomFile.id !== n.id) S.nomFile = Object.assign({ id: n.id }, await call('portalGetNomina', S.sesion, n.id));
+        if (!n.consultada) { n.consultada = S.nomFile.consultada || 'ya'; renderDrawer(); }
+        await renderPdf(b64ToBytes(S.nomFile.data), box);
+        const b = $('#nomDl'); if (b) b.disabled = false;
+      } catch (e) { box.innerHTML = '<div class="banner err">' + esc(msg(e)) + '</div>'; }
+    }, 0);
+    return '<button class="btn sm" type="button" data-act="go" data-v="nominas">‹ Mis nóminas</button><h1 style="margin-top:12px">Nómina de ' + esc(nomMes(n)) + '</h1>' +
+      (n.actualizada ? '<div class="banner info small">Es la nómina corregida: la anterior deja de valer.</div>' : '') +
+      '<button class="btn primary block" type="button" data-act="dlNom" id="nomDl" disabled style="margin-bottom:12px">Descargar el PDF</button>' +
+      '<div id="docBox" class="docbox"><div class="loading">Abriendo la nómina…</div></div>';
+  }
 
   /* ---------- Ver un documento (fotos y PDF, también en el móvil) ---------- */
   const LIBS = { pdfjs: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js', pdfjsWorker: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js', pdflib: 'https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js' };
@@ -592,6 +634,22 @@
     },
     openSign(el) { S.sign = el.dataset.id; S.view = 'firmar'; render(); },
     viewDoc(el) { const x = S.d.docs.lista.find((y) => y.id === el.dataset.id); if (!x) return; S.doc = { id: x.id, titulo: x.titulo, firmado: false }; S.view = 'verdoc'; render(); },
+    openNom(el) {
+      const N = S.d.nominas;
+      S.nomId = el.dataset.id;
+      S.view = N && N.acepta ? 'vernom' : 'nominas';
+      menu(false); render();
+    },
+    async nomAcepta(el) {
+      el.disabled = true;
+      try { S.d.nominas.acepta = await call('portalAceptarNominas', S.sesion); S.view = S.nomId ? 'vernom' : 'nominas'; render(); toast('¡Hecho! Ya puedes ver tus nóminas.'); }
+      catch (e) { el.disabled = false; fail(e); }
+    },
+    dlNom() {
+      const f = S.nomFile; if (!f) return;
+      const url = URL.createObjectURL(new Blob([b64ToBytes(f.data)], { type: 'application/pdf' }));
+      const a = document.createElement('a'); a.href = url; a.download = f.nombre; document.body.appendChild(a); a.click(); a.remove();
+    },
     async dlDoc(el) {
       el.disabled = true;
       try {
