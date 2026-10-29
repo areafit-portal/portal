@@ -180,7 +180,7 @@
       const h = l.reduce((t, s) => t + (s.b - s.a) / 60, 0);
       const f = fest[d];
       return '<div class="dayh"><b>' + DIAS[d] + ' ' + dt.getDate() + (f ? '<span class="pfest">Festivo</span>' : '') + '</b><span>' + (h ? fmtH(h) + ' h' : '') + '</span></div>' +
-        (f ? '<div class="festd">' + esc(f) + (l.length ? '. Vienes a trabajar: estas horas se te pagan aparte como horas festivas.' : ': no vienes, descansa.') + '</div>' : '') +
+        (f ? '<div class="festd">' + esc(f) + (l.length ? '. Se te retribuye según el convenio, aunque no hagas tu horario habitual. Además vienes a trabajar: estas horas se te pagan aparte como horas festivas.' : ': no vienes y se te retribuye según el convenio.') + '</div>' : '') +
         (l.length ? shiftRows(l.sort((x, y) => x.a - y.a)) : (f ? '' : '<div class="free">Libre</div>'));
     }).join('');
   }
