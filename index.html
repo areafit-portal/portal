@@ -197,7 +197,7 @@
       (note ? '<div class="banner warn">' + esc(note) + '</div>' : '') +
       '<div class="card"><label class="field"><span>Tu email</span><input class="input" type="email" id="lgEmail" autocomplete="email" inputmode="email" placeholder="nombre@ejemplo.com"></label>' +
       '<button class="btn primary block" type="button" data-act="sendLink" id="lgBtn">Enviarme el enlace</button></div>' +
-      '<p class="small muted">El enlace y el código caducan en 15 minutos. Después, este aparato te recuerda durante 30 días.</p></div>';
+      '<p class="small muted">El enlace y el código caducan en 15 minutos. Después, este aparato te recuerda: no tendrás que volver a pedirlo mientras entres al menos una vez cada 90 días. Consejo: añade el portal a la pantalla de inicio del móvil.</p></div>';
   }
   function renderSent(email) {
     S.loginEmail = email;
@@ -788,11 +788,18 @@
   /* ---------- Arranque ---------- */
   async function boot() {
     if (ACESO_OK()) {
+      // Quita el enlace de la dirección: si guarda el portal en favoritos o en la pantalla de inicio, que guarde la dirección limpia
+      const limpia = () => { try { if (IN_GOOGLE) google.script.history.replace(null, { portal: '1' }); else history.replaceState(null, '', location.pathname); } catch (e) { /* no pasa nada */ } };
       try {
         const r = await call('portalLogin', ACCESO);
         S.sesion = r.sesion; store(KEY, r.sesion);
-        try { if (IN_GOOGLE) google.script.history.replace(null, { portal: '1' }); else history.replaceState(null, '', location.pathname); } catch (e) { /* no pasa nada */ }
-      } catch (e) { renderLogin(msg(e)); return; }
+        limpia();
+      } catch (e) {
+        limpia();
+        // El enlace del correo ha caducado o ya se usó, pero este aparato ya tenía la sesión abierta: entra igual
+        S.sesion = load(KEY);
+        if (!S.sesion) { renderLogin(msg(e)); return; }
+      }
     } else if (HORARIO) {
       try {
         const r = await call('portalOpenHorario', HORARIO);
