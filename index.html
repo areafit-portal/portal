@@ -296,14 +296,17 @@
     let h = '<h1>Vacaciones y permisos</h1><p class="muted small" style="margin:0 0 12px">Lo que te queda en ' + s.anio + '. Lo disfrutado sale de tus horarios.</p>' +
       '<div class="kpis">' + saldoCard('Vacaciones', s.vac, 'días') + saldoCard('Asuntos propios', s.ap, 'jornadas') + '</div>' +
       '<button class="btn primary block" type="button" data-act="go" data-v="pedir">Pedir vacaciones o un permiso</button>';
-    if (d.previstas.length) h += '<h2>Aprobadas próximamente</h2>' + d.previstas.map((a) => { const m = motivo(a.tipo); return '<div class="card" style="padding:12px 14px"><span class="mdot" style="background:' + esc(m.color) + '"></span><b>' + esc(m.nombre) + '</b> · ' + fdate(a.desde) + (a.hasta !== a.desde ? ' – ' + fdate(a.hasta) : '') + '</div>'; }).join('');
+    if (d.previstas.length) h += '<h2>Aprobadas próximamente</h2>' + d.previstas.map((a) => { const m = motivo(a.tipo); return '<div class="card" style="padding:12px 14px"><span class="mdot" style="background:' + esc(m.color) + '"></span><b>' + esc(m.nombre) + '</b> · ' + fdate(a.desde) + (a.hasta !== a.desde ? ' – ' + fdate(a.hasta) : '') + (a.hora_desde ? ' · de ' + a.hora_desde.replace(/^0/, '') + ' a ' + a.hora_hasta.replace(/^0/, '') : '') + '</div>'; }).join('');
     h += '<h2>Mis solicitudes</h2>';
     h += d.solicitudes.length ? d.solicitudes.map((x) => {
       const m = motivo(x.tipo);
       return '<div class="card" style="padding:12px 14px"><div style="display:flex;align-items:center;gap:8px"><span class="mdot" style="background:' + esc(m.color) + '"></span><b style="flex:1">' + esc(m.nombre) + '</b>' + pillEstado(x.estado) + '</div>' +
-        '<div class="small" style="margin-top:4px">' + fdate(x.desde) + (x.hasta !== x.desde ? ' – ' + fdate(x.hasta) : '') + ' · ' + x.dias + ' día' + (x.dias === 1 ? '' : 's') + '</div>' +
+        '<div class="small" style="margin-top:4px">' + fdate(x.desde) + (x.hasta !== x.desde ? ' – ' + fdate(x.hasta) : '') + (x.hora_desde ? ' · de ' + x.hora_desde.replace(/^0/, '') + ' a ' + x.hora_hasta.replace(/^0/, '') : ' · ' + x.dias + ' día' + (x.dias === 1 ? '' : 's')) + '</div>' +
         (x.notas ? '<div class="small muted">«' + esc(x.notas) + '»</div>' : '') + (x.comentario ? '<div class="small" style="margin-top:4px"><b>Coordinación:</b> ' + esc(x.comentario) + '</div>' : '') +
-        (x.estado === 'PENDIENTE' ? '<button class="btn sm" type="button" style="margin-top:8px" data-act="cancel" data-id="' + esc(x.id) + '">Anular</button>' : '') + '</div>';
+        (x.estado === 'PENDIENTE' ? '<button class="btn sm" type="button" style="margin-top:8px" data-act="cancel" data-id="' + esc(x.id) + '">Anular</button>' : '') +
+        (x.estado === 'APROBADA' && m.justificante && x.desde <= S.d.hoy ? (x.asist_id ? '<div class="small" style="margin-top:8px;color:#1E6B3D;font-weight:600">✓ Justificante de asistencia entregado</div>' :
+          '<div class="banner warn" style="margin:8px 0 0">Cuando hayas ido, sube el <b>justificante de asistencia</b> (una foto vale).</div>' +
+          '<label class="filebtn" style="margin-top:8px"><input type="file" accept="image/*,application/pdf" data-on="justAsist" data-id="' + esc(x.id) + '"><span class="fic" aria-hidden="true">📎</span><span>Subir justificante de asistencia</span></label>') : '') + '</div>';
     }).join('') : '<div class="card muted small">Todavía no has pedido nada desde el portal.</div>';
     return h;
   }
@@ -327,31 +330,45 @@
       '<p class="muted small" style="margin:0 0 12px">Le llega a tu coordinador, que la aprueba o no. Te avisaremos por correo.</p><div class="card">' +
       '<label class="field"><span>Qué pides</span><select class="input" id="rqTipo" data-on="rq">' + ms.map((m) => '<option value="' + esc(m.id) + '">' + esc(m.nombre) + '</option>').join('') + '</select></label>' +
       '<div class="row2"><label class="field"><span>Desde</span><input class="input" type="date" id="rqDesde" value="' + tomorrow + '" min="' + esc(S.d.hoy) + '" data-on="rq"></label>' +
-      '<label class="field"><span>Hasta</span><input class="input" type="date" id="rqHasta" value="' + tomorrow + '" min="' + esc(S.d.hoy) + '" data-on="rq"></label></div>' +
+      '<label class="field" id="rqHastaF"><span>Hasta</span><input class="input" type="date" id="rqHasta" value="' + tomorrow + '" min="' + esc(S.d.hoy) + '" data-on="rq"></label></div>' +
+      '<label class="check" style="display:flex;gap:8px;align-items:center;margin:4px 0 10px"><input type="checkbox" id="rqHoras" data-on="rq"> Solo unas horas (médico, DNI, un examen…)</label>' +
+      '<div id="rqHorasF" class="row2 hidden"><label class="field"><span>Desde la hora</span><input class="input" type="time" step="900" id="rqH0" value="09:00" data-on="rq"></label>' +
+      '<label class="field"><span>Hasta la hora</span><input class="input" type="time" step="900" id="rqH1" value="10:00" data-on="rq"></label></div>' +
       '<div id="rqJust" class="field hidden"><span>Justificante <b class="req">obligatorio</b></span>' +
       '<label class="filebtn"><input type="file" id="rqFile" accept="image/*,application/pdf" data-on="rqf"><span class="fic" aria-hidden="true">📎</span><span id="rqFileName">Hacer una foto o elegir un archivo</span></label>' +
       '<span class="small muted" style="font-weight:400;display:block;margin-top:4px">Foto o PDF del documento (certificado de matrimonio, del hospital…).</span></div>' +
       '<label class="field"><span>Nota para tu coordinador (opcional)</span><textarea class="input" id="rqNotas" maxlength="400"></textarea></label>' +
       '<div id="rqInfo" class="banner info">…</div>' +
       '<button class="btn primary block" type="button" data-act="sendReq" id="rqBtn">Enviar solicitud</button></div>' +
-      '<p class="small muted">Para una visita médica o una baja, habla directamente con tu coordinador.</p>';
+      '<p class="small muted">Para una baja, habla directamente con tu coordinador.</p>';
     setTimeout(rqUpdate, 0);
     return h;
   }
   function rqUpdate() {
     const tipo = $('#rqTipo'), a = $('#rqDesde'), b = $('#rqHasta'), info = $('#rqInfo'), btn = $('#rqBtn');
     if (!tipo || !info) return;
-    if (a.value && (!b.value || b.value < a.value)) b.value = a.value;
     const m = S.d.motivos.find((x) => x.id === tipo.value);
-    const n = a.value && b.value ? countDays(a.value, b.value, m.unidad) : 0;
+    const hc = $('#rqHoras');
+    if (m.unidad === 'HORAS' && hc && !hc.checked) hc.checked = true; // médico: siempre por horas
+    if (hc) hc.disabled = m.unidad === 'HORAS';
+    const horas = !!(hc && hc.checked);
+    $('#rqHorasF').classList.toggle('hidden', !horas);
+    $('#rqHastaF').classList.toggle('hidden', horas);
+    if (horas) b.value = a.value;
+    if (a.value && (!b.value || b.value < a.value)) b.value = a.value;
+    const h0 = horas ? $('#rqH0').value : '', h1 = horas ? $('#rqH1').value : '';
+    const hrs = horas && h0 && h1 && h1 > h0 ? (Number(h1.slice(0, 2)) * 60 + Number(h1.slice(3)) - Number(h0.slice(0, 2)) * 60 - Number(h0.slice(3))) / 60 : 0;
+    const n = horas ? (hrs ? (m.unidad === 'HORAS' ? hrs : 1) : 0) : (a.value && b.value ? countDays(a.value, b.value, m.unidad) : 0);
     const q = quedan(m);
     let ok = n > 0, txt;
     if (!a.value) { ok = false; txt = 'Elige las fechas.'; }
     else if (a.value < S.d.hoy) { ok = false; txt = 'No se pueden pedir días que ya han pasado.'; }
     else if (a.value.slice(0, 4) !== b.value.slice(0, 4)) { ok = false; txt = 'Si coge días de dos años, pídelo en dos solicitudes.'; }
+    else if (horas && !hrs) { ok = false; txt = 'Pon de qué hora a qué hora (la de fin, después de la de inicio).'; }
     else if (!n) { ok = false; txt = 'En esas fechas no hay días laborables.'; }
     else {
-      txt = (n === 1 ? 'Es <b>1 día' : 'Son <b>' + n + ' días') + (m.unidad === 'DIAS_LAB' ? (n === 1 ? ' laborable' : ' laborables') : '') + '</b>' + (m.unidad === 'DIAS_LAB' ? ' (de lunes a viernes)' : '') + '.';
+      txt = horas ? 'Es <b>de ' + h0.replace(/^0/, '') + ' a ' + h1.replace(/^0/, '') + '</b> (' + fmtH(hrs) + ' h). Solo esa franja: lo que trabajes antes o después ese día sigue igual.' :
+        (n === 1 ? 'Es <b>1 día' : 'Son <b>' + n + ' días') + (m.unidad === 'DIAS_LAB' ? (n === 1 ? ' laborable' : ' laborables') : '') + '</b>' + (m.unidad === 'DIAS_LAB' ? ' (de lunes a viernes)' : '') + '.';
       if (q !== null) {
         if (n > q + 0.001) { ok = false; txt += ' <b>' + (q <= 0 ? 'No te quedan días de ' + esc(m.nombre.toLowerCase()) + ' este año.' : 'Solo te quedan ' + fmtH(q) + '.') + '</b>'; }
         else txt += ' Te quedarían ' + fmtH(q - n) + '.';
@@ -692,7 +709,9 @@
     async sendReq(el) {
       el.disabled = true; el.textContent = 'Enviando…';
       const m = S.d.motivos.find((x) => x.id === $('#rqTipo').value);
-      const r = { tipo: $('#rqTipo').value, desde: $('#rqDesde').value, hasta: $('#rqHasta').value, notas: $('#rqNotas').value, adjunto: m && m.justificante ? S.adj : null };
+      const horas = $('#rqHoras') && $('#rqHoras').checked;
+      const r = { tipo: $('#rqTipo').value, desde: $('#rqDesde').value, hasta: horas ? $('#rqDesde').value : $('#rqHasta').value, notas: $('#rqNotas').value, adjunto: m && m.justificante ? S.adj : null,
+        hora_desde: horas ? $('#rqH0').value : '', hora_hasta: horas ? $('#rqH1').value : '' };
       try { S.d = await call('portalRequest', S.sesion, r); S.adj = null; S.view = 'ausencias'; render(); toast('Solicitud enviada a tu coordinador.'); }
       catch (e) { el.disabled = false; el.textContent = 'Enviar solicitud'; fail(e); }
     },
@@ -718,6 +737,13 @@
   document.addEventListener('change', (ev) => {
     if (ev.target.dataset && ev.target.dataset.on === 'rq') rqUpdate();
     if (ev.target.dataset && ev.target.dataset.on === 'rqf') readFile(ev.target.files && ev.target.files[0]);
+    if (ev.target.dataset && ev.target.dataset.on === 'justAsist') {
+      const inp = ev.target, f = inp.files && inp.files[0];
+      if (!f) return;
+      const lbl = inp.parentNode.querySelector('span:last-child'); if (lbl) lbl.textContent = 'Subiendo…';
+      prepFile(f).then((adj) => call('portalJustUpload', S.sesion, inp.dataset.id, 'asist', adj)).then((d) => { S.d = d; render(); toast('¡Gracias! Justificante entregado.'); })
+        .catch((e) => { if (lbl) lbl.textContent = 'Subir justificante de asistencia'; fail(e); });
+    }
     if (ev.target.dataset && ev.target.dataset.on === 'docUp') {
       const tipo = ev.target.dataset.tipo, f = ev.target.files && ev.target.files[0];
       if (!f) return;
