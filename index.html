@@ -189,12 +189,16 @@
   }
 
   /* ---------- Acceso ---------- */
+  // ¿Abierto desde el icono de la pantalla de inicio? En el iPhone ese icono tiene su propia memoria, aparte de Safari:
+  // el botón del correo se abre en Safari, así que aquí hay que entrar con el código de 6 cifras.
+  const ICONO = (function () { try { return window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches; } catch (e) { return false; } })();
   function renderLogin(note) {
     $('#burger').classList.add('hidden');
     $('#drawer').innerHTML = '';
     $('#view').innerHTML = '<div class="login"><h1>Tu portal de Areafit</h1>' +
       '<p class="muted">Tus horarios, tus vacaciones y permisos y tus datos. Escribe el email que tienes dado en tu centro y te mandamos un enlace para entrar.</p>' +
       (note ? '<div class="banner warn">' + esc(note) + '</div>' : '') +
+      (ICONO ? '<div class="banner ok">Estás en el icono de tu pantalla de inicio. Para entrar aquí, usa el <b>código de 6 cifras</b> del correo (no el botón del correo: se abre en el navegador y este icono se quedaría sin entrar). Solo tendrás que hacerlo una vez.</div>' : '') +
       '<div class="card"><label class="field"><span>Tu email</span><input class="input" type="email" id="lgEmail" autocomplete="email" inputmode="email" placeholder="nombre@ejemplo.com"></label>' +
       '<button class="btn primary block" type="button" data-act="sendLink" id="lgBtn">Enviarme el enlace</button></div>' +
       '<p class="small muted">El enlace y el código caducan en 15 minutos. Después, este aparato te recuerda: no tendrás que volver a pedirlo mientras entres al menos una vez cada 90 días. Consejo: añade el portal a la pantalla de inicio del móvil.</p></div>';
@@ -202,7 +206,8 @@
   function renderSent(email) {
     S.loginEmail = email;
     $('#view').innerHTML = '<div class="login"><h1>Revisa tu correo</h1><div class="banner ok">Si <b>' + esc(email) + '</b> está dado de alta en tu centro, te acaba de llegar un correo con el botón <b>«Entrar en mi portal»</b> y un <b>código de 6 cifras</b>.</div>' +
-      '<div class="card"><label class="field"><span>¿Tienes el correo en otro aparato? Escribe el código</span>' +
+      (ICONO ? '<div class="banner warn"><b>Copia el código de 6 cifras y escríbelo aquí abajo.</b> No pulses el botón del correo: se abriría en el navegador y este icono se quedaría sin entrar.</div>' : '') +
+      '<div class="card"><label class="field"><span>' + (ICONO ? 'Escribe el código del correo' : '¿Tienes el correo en otro aparato? Escribe el código') + '</span>' +
       '<div style="display:flex;gap:8px"><input class="input codein" id="lgCode" inputmode="numeric" autocomplete="one-time-code" maxlength="7" placeholder="000000">' +
       '<button class="btn" type="button" data-act="pasteCode">Pegar</button></div></label>' +
       '<button class="btn primary block" type="button" data-act="codeLogin" id="lgCodeBtn">Entrar con el código</button></div>' +
