@@ -303,7 +303,7 @@
       return '<div class="card" style="padding:12px 14px"><div style="display:flex;align-items:center;gap:8px"><span class="mdot" style="background:' + esc(m.color) + '"></span><b style="flex:1">' + esc(m.nombre) + '</b>' + pillEstado(x.estado) + '</div>' +
         '<div class="small" style="margin-top:4px">' + fdate(x.desde) + (x.hasta !== x.desde ? ' – ' + fdate(x.hasta) : '') + (x.hora_desde ? ' · de ' + x.hora_desde.replace(/^0/, '') + ' a ' + x.hora_hasta.replace(/^0/, '') : ' · ' + x.dias + ' día' + (x.dias === 1 ? '' : 's')) + '</div>' +
         (x.notas ? '<div class="small muted">«' + esc(x.notas) + '»</div>' : '') + (x.comentario ? '<div class="small" style="margin-top:4px"><b>Coordinación:</b> ' + esc(x.comentario) + '</div>' : '') +
-        (x.estado === 'PENDIENTE' ? '<button class="btn sm" type="button" style="margin-top:8px" data-act="cancel" data-id="' + esc(x.id) + '">Anular</button>' : '') +
+        (x.estado === 'PENDIENTE' ? '<div style="display:flex;gap:8px;margin-top:8px"><button class="btn sm" type="button" data-act="editReq" data-id="' + esc(x.id) + '">Cambiar</button><button class="btn sm" type="button" data-act="cancel" data-id="' + esc(x.id) + '">Anular</button></div>' : '') +
         (x.estado === 'APROBADA' && m.justificante && x.desde <= S.d.hoy ? (x.asist_id ? '<div class="small" style="margin-top:8px;color:#1E6B3D;font-weight:600">✓ Justificante de asistencia entregado</div>' :
           '<div class="banner warn" style="margin:8px 0 0">Cuando hayas ido, sube el <b>justificante de asistencia</b> (una foto vale).</div>' +
           '<label class="filebtn" style="margin-top:8px"><input type="file" accept="image/*,application/pdf" data-on="justAsist" data-id="' + esc(x.id) + '"><span class="fic" aria-hidden="true">📎</span><span>Subir justificante de asistencia</span></label>') : '') + '</div>';
@@ -326,8 +326,10 @@
     S.adj = null;
     const ms = S.d.motivos;
     const tomorrow = iso(new Date(Date.now() + 864e5));
-    let h = '<button class="btn sm" type="button" data-act="go" data-v="ausencias">‹ Vacaciones y permisos</button><h1 style="margin-top:12px">Pedir</h1>' +
-      '<p class="muted small" style="margin:0 0 12px">Le llega a tu coordinador, que la aprueba o no. Te avisaremos por correo.</p><div class="card">' +
+    const E = S.rqEdit ? S.d.solicitudes.find((x) => x.id === S.rqEdit && x.estado === 'PENDIENTE') : null;
+    if (!E) S.rqEdit = null;
+    let h = '<button class="btn sm" type="button" data-act="go" data-v="ausencias">‹ Vacaciones y permisos</button><h1 style="margin-top:12px">' + (E ? 'Cambiar tu solicitud' : 'Pedir') + '</h1>' +
+      '<p class="muted small" style="margin:0 0 12px">' + (E ? 'Corrige lo que haga falta: a tu coordinador le llega la solicitud cambiada (sigue pendiente).' : 'Le llega a tu coordinador, que la aprueba o no. Te avisaremos por correo.') + '</p><div class="card">' +
       '<label class="field"><span>Qué pides</span><select class="input" id="rqTipo" data-on="rq">' + ms.map((m) => '<option value="' + esc(m.id) + '">' + esc(m.nombre) + '</option>').join('') + '</select></label>' +
       '<div class="row2"><label class="field"><span>Desde</span><input class="input" type="date" id="rqDesde" value="' + tomorrow + '" min="' + esc(S.d.hoy) + '" data-on="rq"></label>' +
       '<label class="field" id="rqHastaF"><span>Hasta</span><input class="input" type="date" id="rqHasta" value="' + tomorrow + '" min="' + esc(S.d.hoy) + '" data-on="rq"></label></div>' +
@@ -339,9 +341,15 @@
       '<span class="small muted" style="font-weight:400;display:block;margin-top:4px">Foto o PDF del documento (certificado de matrimonio, del hospital…).</span></div>' +
       '<label class="field"><span>Nota para tu coordinador (opcional)</span><textarea class="input" id="rqNotas" maxlength="400"></textarea></label>' +
       '<div id="rqInfo" class="banner info">…</div>' +
-      '<button class="btn primary block" type="button" data-act="sendReq" id="rqBtn">Enviar solicitud</button></div>' +
+      '<button class="btn primary block" type="button" data-act="sendReq" id="rqBtn">' + (E ? 'Guardar el cambio' : 'Enviar solicitud') + '</button></div>' +
       '<p class="small muted">Para una baja, habla directamente con tu coordinador.</p>';
-    setTimeout(rqUpdate, 0);
+    setTimeout(() => {
+      if (E) {
+        $('#rqTipo').value = E.tipo; $('#rqDesde').value = E.desde; $('#rqHasta').value = E.hasta; $('#rqNotas').value = E.notas || '';
+        if (E.hora_desde) { $('#rqHoras').checked = true; $('#rqH0').value = E.hora_desde; $('#rqH1').value = E.hora_hasta; }
+      }
+      rqUpdate();
+    }, 0);
     return h;
   }
   function rqUpdate() {
@@ -359,7 +367,9 @@
     const h0 = horas ? $('#rqH0').value : '', h1 = horas ? $('#rqH1').value : '';
     const hrs = horas && h0 && h1 && h1 > h0 ? (Number(h1.slice(0, 2)) * 60 + Number(h1.slice(3)) - Number(h0.slice(0, 2)) * 60 - Number(h0.slice(3))) / 60 : 0;
     const n = horas ? (hrs ? (m.unidad === 'HORAS' ? hrs : 1) : 0) : (a.value && b.value ? countDays(a.value, b.value, m.unidad) : 0);
-    const q = quedan(m);
+    let q = quedan(m);
+    const E = S.rqEdit ? S.d.solicitudes.find((x) => x.id === S.rqEdit) : null;
+    if (E && q !== null) { const me = S.d.motivos.find((x) => x.id === E.tipo); if (me && (me.id === m.id || (me.grupo && me.grupo === m.grupo))) q += Number(E.dias) || 0; }
     let ok = n > 0, txt;
     if (!a.value) { ok = false; txt = 'Elige las fechas.'; }
     else if (a.value < S.d.hoy) { ok = false; txt = 'No se pueden pedir días que ya han pasado.'; }
@@ -381,7 +391,7 @@
     const jb = $('#rqJust');
     if (jb) jb.classList.toggle('hidden', !m.justificante);
     let onlyAdj = false;
-    if (ok && m.justificante && !S.adj) { ok = false; onlyAdj = true; txt += ' <b>Adjunta el justificante para poder enviarla.</b>'; }
+    if (ok && m.justificante && !S.adj && !(E && E.adjunto_id)) { ok = false; onlyAdj = true; txt += ' <b>Adjunta el justificante para poder enviarla.</b>'; }
     info.className = 'banner ' + (ok ? 'info' : (onlyAdj ? 'warn' : 'err'));
     info.innerHTML = txt;
     btn.disabled = !ok;
@@ -618,7 +628,8 @@
   }
   const ACT = {
     menu() { menu(!document.body.classList.contains('menu')); },
-    go(el) { S.view = el.dataset.v; menu(false); render(); },
+    go(el) { S.view = el.dataset.v; if (S.view === 'pedir' && !el.dataset.keep) S.rqEdit = null; menu(false); render(); },
+    editReq(el) { S.rqEdit = el.dataset.id; S.view = 'pedir'; render(); window.scrollTo(0, 0); },
     backLogin() { renderLogin(); },
     async pasteCode() {
       try { const t = await navigator.clipboard.readText(); const m = /\d{3}\s?\d{3}/.exec(t || ''); if (m) { $('#lgCode').value = m[0].replace(/\s/g, ''); return; } toast('No hay ningún código copiado. Mantén pulsado el código en el correo y elige «Copiar».', true); }
@@ -711,9 +722,10 @@
       const m = S.d.motivos.find((x) => x.id === $('#rqTipo').value);
       const horas = $('#rqHoras') && $('#rqHoras').checked;
       const r = { tipo: $('#rqTipo').value, desde: $('#rqDesde').value, hasta: horas ? $('#rqDesde').value : $('#rqHasta').value, notas: $('#rqNotas').value, adjunto: m && m.justificante ? S.adj : null,
-        hora_desde: horas ? $('#rqH0').value : '', hora_hasta: horas ? $('#rqH1').value : '' };
-      try { S.d = await call('portalRequest', S.sesion, r); S.adj = null; S.view = 'ausencias'; render(); toast('Solicitud enviada a tu coordinador.'); }
-      catch (e) { el.disabled = false; el.textContent = 'Enviar solicitud'; fail(e); }
+        hora_desde: horas ? $('#rqH0').value : '', hora_hasta: horas ? $('#rqH1').value : '', editId: S.rqEdit || '' };
+      const ed = !!S.rqEdit;
+      try { S.d = await call('portalRequest', S.sesion, r); S.adj = null; S.rqEdit = null; S.view = 'ausencias'; render(); toast(ed ? 'Solicitud cambiada: le llega a tu coordinador.' : 'Solicitud enviada a tu coordinador.'); }
+      catch (e) { el.disabled = false; el.textContent = ed ? 'Guardar el cambio' : 'Enviar solicitud'; fail(e); }
     },
     async cancel(el) {
       if (!window.confirm('¿Anular esta solicitud?')) return;
