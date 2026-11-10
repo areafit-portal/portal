@@ -85,6 +85,9 @@
   .toast.err { background: var(--err); }
   .hidden { display: none !important; }
   .login { max-width: 420px; margin: 8vh auto 0; }
+  .mefoto { display: flex; gap: 14px; align-items: center; }
+  .mefimg { width: 84px; height: 84px; border-radius: 50%; overflow: hidden; background: var(--brand-soft); color: var(--brand); display: flex; align-items: center; justify-content: center; font-size: 32px; font-weight: 700; flex: none; }
+  .mefimg img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .filebtn { display: flex; align-items: center; gap: 10px; min-height: 50px; padding: 0 14px; border: 1.5px dashed #9AA8B8; border-radius: 11px; background: #F8FAFB; cursor: pointer; font-weight: 500; font-size: 14px; }
   .filebtn input { position: absolute; opacity: 0; width: 1px; height: 1px; }
   .filebtn .fic { font-size: 18px; }
@@ -144,7 +147,7 @@
   function toast(t, err) { const el = $('#toast'); el.textContent = t; el.className = 'toast' + (err ? ' err' : ''); clearTimeout(tt); tt = setTimeout(() => { el.className = 'toast hidden'; }, err ? 6000 : 3500); }
   function fail(e) {
     const m = e && e.message ? e.message : String(e);
-    if (/SESION:/.test(m)) { store(KEY, null); S.sesion = null; S.d = null; renderLogin(msg(e)); return; }
+    if (/SESION:/.test(m)) { store(KEY, null); S.sesion = null; S.d = null; S.foto = undefined; renderLogin(msg(e)); return; }
     toast(msg(e), true);
   }
   function t2(m) { return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); }
@@ -399,10 +402,14 @@
 
   function vDatos() {
     const me = S.d.me;
+    if (S.foto === undefined) { S.foto = null; call('portalFoto', S.sesion).then((f) => { S.foto = f || ''; if (S.view === 'datos') render(); }).catch(() => { S.foto = ''; }); }
     return '<h1>Mis datos</h1><div class="card"><div class="kv"><span>Nombre</span><b>' + esc([me.nombre, me.apellido1, me.apellido2].filter(Boolean).join(' ')) + '</b>' +
       '<span>Centro</span><b>' + esc(me.centro) + '</b><span>Código</span><b>' + esc(me.codigo) + '</b>' +
       '<span>Contrato</span><b>' + fmtH(me.horas_contrato || 0) + ' h/semana</b>' + (me.categoria ? '<span>Categoría</span><b>' + esc(me.categoria) + '</b>' : '') +
       (me.fecha_alta ? '<span>Alta</span><b>' + esc(me.fecha_alta.split('-').reverse().join('/')) + '</b>' : '') + '</div></div>' +
+      '<h2>Tu foto</h2><div class="card mefoto"><div class="mefimg" id="mdFoto">' + (S.foto ? '<img src="' + esc(S.foto) + '" alt="Tu foto">' : '<span aria-hidden="true">' + esc((me.nombre || '?').charAt(0)) + '</span>') + '</div>' +
+      '<div style="flex:1"><p class="small muted" style="margin:0 0 8px">Es la de tu ficha: la ve tu coordinador. Que se te vea bien la cara, de frente y con luz.</p>' +
+      '<label class="filebtn"><input type="file" accept="image/*" data-on="meFoto"><span class="fic" aria-hidden="true">📷</span><span id="mdFotoTxt">' + (S.foto ? 'Cambiar mi foto' : 'Hacer o elegir una foto') + '</span></label></div></div>' +
       '<h2>Puedes cambiar</h2><div class="card">' +
       '<label class="field"><span>Email</span><input class="input" type="email" id="mdEmail" value="' + esc(me.email) + '" autocomplete="email"></label>' +
       '<label class="field"><span>Teléfono</span><input class="input" type="tel" id="mdTel" value="' + esc(me.telefono || '') + '" autocomplete="tel"></label>' +
@@ -492,6 +499,31 @@
       '<div id="docBox" class="docbox"><div class="loading">Abriendo la nómina…</div></div>';
   }
 
+  /** La foto, cuadrada y pequeña (como la de la ficha del gestor). */
+  function shrinkImage(file) {
+    return new Promise((resolve, reject) => {
+      const rd = new FileReader();
+      rd.onerror = () => reject(new Error('No se ha podido leer la foto.'));
+      rd.onload = () => {
+        const img = new Image();
+        img.onerror = () => reject(new Error('Ese archivo no es una imagen.'));
+        img.onload = () => {
+          const side = Math.min(img.width, img.height), sx = (img.width - side) / 2, sy = (img.height - side) / 2;
+          let size = 256, q = 0.82, out = '';
+          for (let i = 0; i < 5; i++) {
+            const c = document.createElement('canvas'); c.width = size; c.height = size;
+            c.getContext('2d').drawImage(img, sx, sy, side, side, 0, 0, size, size);
+            out = c.toDataURL('image/jpeg', q);
+            if (out.length < 40000) break;
+            size = Math.round(size * 0.8); q -= 0.08;
+          }
+          resolve(out);
+        };
+        img.src = rd.result;
+      };
+      rd.readAsDataURL(file);
+    });
+  }
   /* ---------- Ver un documento (fotos y PDF, también en el móvil) ---------- */
   const LIBS = { pdfjs: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js', pdfjsWorker: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js', pdflib: 'https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js' };
   const loaded = {};
@@ -648,7 +680,7 @@
       el.disabled = true; el.textContent = 'Enviando…';
       try { await call('portalRequestLink', email); renderSent(email); } catch (e) { el.disabled = false; el.textContent = 'Enviarme el enlace'; toast(msg(e), true); }
     },
-    logout() { if (!window.confirm('¿Cerrar la sesión en este móvil?')) return; store(KEY, null); S.sesion = null; S.d = null; menu(false); renderLogin(); },
+    logout() { if (!window.confirm('¿Cerrar la sesión en este móvil?')) return; store(KEY, null); S.sesion = null; S.d = null; S.foto = undefined; menu(false); renderLogin(); },
     openWeek(el) { S.week = el.dataset.id; S.view = 'semana'; render(); },
     async sign(el) {
       el.disabled = true; el.textContent = 'Firmando…';
@@ -755,6 +787,12 @@
       const lbl = inp.parentNode.querySelector('span:last-child'); if (lbl) lbl.textContent = 'Subiendo…';
       prepFile(f).then((adj) => call('portalJustUpload', S.sesion, inp.dataset.id, 'asist', adj)).then((d) => { S.d = d; render(); toast('¡Gracias! Justificante entregado.'); })
         .catch((e) => { if (lbl) lbl.textContent = 'Subir justificante de asistencia'; fail(e); });
+    }
+    if (ev.target.dataset && ev.target.dataset.on === 'meFoto') {
+      const f = ev.target.files && ev.target.files[0]; if (!f) return;
+      const lbl = $('#mdFotoTxt'); if (lbl) lbl.textContent = 'Subiendo…';
+      shrinkImage(f).then((data) => call('portalSaveFoto', S.sesion, data)).then((data) => { S.foto = data; render(); toast('¡Foto cambiada! Ya sale en tu ficha.'); })
+        .catch((e) => { if (lbl) lbl.textContent = S.foto ? 'Cambiar mi foto' : 'Hacer o elegir una foto'; fail(e); });
     }
     if (ev.target.dataset && ev.target.dataset.on === 'docUp') {
       const tipo = ev.target.dataset.tipo, f = ev.target.files && ev.target.files[0];
