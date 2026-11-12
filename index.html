@@ -259,6 +259,8 @@
     else if (dr && (dr.docs.length || dr.datos.length)) h += '<button type="button" class="banner info" style="display:block;width:100%;text-align:left;border:0;cursor:pointer" data-act="go" data-v="docs"><b>Completa tu alta</b>: ' + (dr.datos.length ? 'faltan datos personales' + (dr.docs.length ? ' y ' : '') : '') + (dr.docs.length ? dr.docs.length + ' documento' + (dr.docs.length > 1 ? 's' : '') : '') + '. Toca para completarla ›</button>';
     nomNuevas().slice(0, 1).forEach((n) => { h += '<button type="button" class="banner info" style="display:block;width:100%;text-align:left;border:0;cursor:pointer" data-act="openNom" data-id="' + esc(n.id) + '">' + (n.actualizada ? 'Se ha <b>actualizado tu nómina de ' + nomMes(n) + '</b>' : 'Ya tienes tu <b>nómina de ' + nomMes(n) + '</b>') + '. Toca para verla ›</button>'; });
     sinFirmar.forEach((w) => { h += '<button type="button" class="banner warn" style="display:block;width:100%;text-align:left;border:0;cursor:pointer" data-act="openWeek" data-id="' + esc(w.id) + '">Tienes el horario de la <b>' + wtag(w.semana) + '</b> (' + weekRange(w.anio, w.semana) + ') sin firmar. Toca para verlo y firmarlo ›</button>'; });
+    const jaP = (S.d.justAus || []).filter((x) => !x.entregado).length;
+    if (jaP) h += '<button type="button" class="banner warn" style="display:block;width:100%;text-align:left;border:0;cursor:pointer" data-act="go" data-v="ausencias">Tu coordinador te pide <b>' + (jaP === 1 ? 'un justificante' : jaP + ' justificantes') + '</b>. Toca para subirlo ›</button>';
     resueltas.forEach((s) => { const m = motivo(s.tipo); h += '<div class="banner ' + (s.estado === 'APROBADA' ? 'ok' : 'err') + '">' + (s.estado === 'APROBADA' ? 'Te han aprobado ' : 'No te han aprobado ') + esc(m.nombre.toLowerCase()) + ' (' + fdate(s.desde) + (s.hasta !== s.desde ? ' – ' + fdate(s.hasta) : '') + ').' + (s.comentario ? ' «' + esc(s.comentario) + '»' : '') + '</div>'; });
     if (hoy.length) h += '<div class="card"><div class="small muted" style="font-weight:600">Hoy</div>' + shiftRows(hoy) + '</div>';
     h += '<div class="card"><div class="small muted" style="font-weight:600">' + (next ? 'Próximo turno · ' + (nextK === iso(new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1)) ? 'mañana, ' : '') + DIAS[(new Date(nextK + 'T12:00:00').getDay() + 6) % 7].toLowerCase() + ' ' + fdate(nextK) : 'Próximo turno') + '</div>' +
@@ -299,6 +301,16 @@
     let h = '<h1>Vacaciones y permisos</h1><p class="muted small" style="margin:0 0 12px">Lo que te queda en ' + s.anio + '. Lo disfrutado sale de tus horarios.</p>' +
       '<div class="kpis">' + saldoCard('Vacaciones', s.vac, 'días') + saldoCard('Asuntos propios', s.ap, 'jornadas') + '</div>' +
       '<button class="btn primary block" type="button" data-act="go" data-v="pedir">Pedir vacaciones o un permiso</button>';
+    const ja = d.justAus || [];
+    if (ja.length) {
+      const pend = ja.filter((x) => !x.entregado).length;
+      h += '<h2>Justificantes que te pide tu coordinador' + (pend ? ' · ' + pend : '') + '</h2>' + ja.map((x) =>
+        '<div class="card" style="padding:12px 14px"><div style="display:flex;align-items:center;gap:8px"><span class="mdot" style="background:' + esc(x.color) + '"></span><b style="flex:1">' + esc(x.nombre) + '</b></div>' +
+        '<div class="small" style="margin-top:4px">' + fdate(x.desde) + (x.hasta !== x.desde ? ' – ' + fdate(x.hasta) : '') + (x.hora_desde ? ' · de ' + x.hora_desde.replace(/^0/, '') + ' a ' + x.hora_hasta.replace(/^0/, '') : '') + '</div>' +
+        (x.entregado ? '<div class="small" style="margin-top:8px;color:#1E6B3D;font-weight:600">✓ Justificante entregado</div>' :
+          '<div class="banner warn" style="margin:8px 0 0">Tu coordinador apuntó esta ausencia. Sube el <b>justificante</b> (una foto vale).</div>' +
+          '<label class="filebtn" style="margin-top:8px"><input type="file" accept="image/*,application/pdf" data-on="justAsist" data-ref="aus" data-id="' + esc(x.id) + '"><span class="fic" aria-hidden="true">📎</span><span>Subir justificante</span></label>') + '</div>').join('');
+    }
     if (d.previstas.length) h += '<h2>Aprobadas próximamente</h2>' + d.previstas.map((a) => { const m = motivo(a.tipo); return '<div class="card" style="padding:12px 14px"><span class="mdot" style="background:' + esc(m.color) + '"></span><b>' + esc(m.nombre) + '</b> · ' + fdate(a.desde) + (a.hasta !== a.desde ? ' – ' + fdate(a.hasta) : '') + (a.hora_desde ? ' · de ' + a.hora_desde.replace(/^0/, '') + ' a ' + a.hora_hasta.replace(/^0/, '') : '') + '</div>'; }).join('');
     h += '<h2>Mis solicitudes</h2>';
     h += d.solicitudes.length ? d.solicitudes.map((x) => {
@@ -320,9 +332,22 @@
     if (m.grupo === 'AP') return s.ap.disponible;
     return s.limites[m.id] ? s.limites[m.id].disponible : null;
   }
+  /** «el festivo del 8/12» / «los festivos del 8/12 y 25/12» que caen de lunes a viernes entre dos fechas. */
+  function festEn(a, b) {
+    const l = (S.d.festivos || []).filter((f) => f >= a && f <= b && [0, 6].indexOf(new Date(f + 'T12:00:00').getDay()) < 0).sort();
+    if (!l.length) return '';
+    const t = l.map((f) => f.slice(8, 10).replace(/^0/, '') + '/' + f.slice(5, 7).replace(/^0/, ''));
+    return (l.length === 1 ? 'el festivo del ' : 'los festivos del ') + (t.length > 1 ? t.slice(0, -1).join(', ') + ' y ' + t[t.length - 1] : t[0]);
+  }
+  /** Días que cuenta: en laborables, sin sábados, domingos ni festivos del centro (igual que el gestor). */
   function countDays(a, b, unidad) {
     let n = 0;
-    for (let t = new Date(a + 'T12:00:00'), e = new Date(b + 'T12:00:00'); t <= e; t = new Date(t.getTime() + 864e5)) { const wd = t.getDay(); if (unidad === 'DIAS_LAB' && (wd === 0 || wd === 6)) continue; n++; }
+    const fest = new Set(S.d.festivos || []);
+    for (let t = new Date(a + 'T12:00:00'), e = new Date(b + 'T12:00:00'); t <= e; t = new Date(t.getTime() + 864e5)) {
+      const wd = t.getDay();
+      if (unidad === 'DIAS_LAB' && (wd === 0 || wd === 6 || fest.has(iso(t)))) continue;
+      n++;
+    }
     return n;
   }
   function vPedir() {
@@ -381,7 +406,7 @@
     else if (!n) { ok = false; txt = 'En esas fechas no hay días laborables.'; }
     else {
       txt = horas ? 'Es <b>de ' + h0.replace(/^0/, '') + ' a ' + h1.replace(/^0/, '') + '</b> (' + fmtH(hrs) + ' h). Solo esa franja: lo que trabajes antes o después ese día sigue igual.' :
-        (n === 1 ? 'Es <b>1 día' : 'Son <b>' + n + ' días') + (m.unidad === 'DIAS_LAB' ? (n === 1 ? ' laborable' : ' laborables') : '') + '</b>' + (m.unidad === 'DIAS_LAB' ? ' (de lunes a viernes)' : '') + '.';
+        (n === 1 ? 'Es <b>1 día' : 'Son <b>' + n + ' días') + (m.unidad === 'DIAS_LAB' ? (n === 1 ? ' laborable' : ' laborables') : '') + '</b>' + (m.unidad === 'DIAS_LAB' ? ' (de lunes a viernes' + (festEn(a.value, b.value) ? ', sin contar ' + festEn(a.value, b.value) : '') + ')' : '') + '.';
       if (q !== null) {
         if (n > q + 0.001) { ok = false; txt += ' <b>' + (q <= 0 ? 'No te quedan días de ' + esc(m.nombre.toLowerCase()) + ' este año.' : 'Solo te quedan ' + fmtH(q) + '.') + '</b>'; }
         else txt += ' Te quedarían ' + fmtH(q - n) + '.';
@@ -499,7 +524,81 @@
       '<div id="docBox" class="docbox"><div class="loading">Abriendo la nómina…</div></div>';
   }
 
-  /** La foto, cuadrada y pequeña (como la de la ficha del gestor). */
+  /**
+   * Editor para encuadrar la foto: se arrastra para moverla y se acerca con la barra (o la rueda del ratón).
+   * Devuelve la parte cuadrada elegida { sx, sy, side } o null si se cancela.
+   */
+  function cropUI(img) {
+    return new Promise((resolve) => {
+      const iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
+      const SZ = Math.min(300, Math.max(200, window.innerWidth - 72));
+      const base = SZ / Math.min(iw, ih);
+      let z = 1, ox = 0, oy = 0;
+      const ov = document.createElement('div');
+      ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-label', 'Ajustar la foto');
+      ov.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(17,20,24,.72);display:flex;align-items:center;justify-content:center;padding:16px';
+      ov.innerHTML = '<div style="background:#fff;color:#14181F;border-radius:14px;padding:16px;max-width:100%;box-shadow:0 12px 40px rgba(0,0,0,.35);font-family:inherit">' +
+        '<div style="font-weight:700;font-size:16px;margin-bottom:4px">Ajusta la foto</div>' +
+        '<div style="font-size:13px;color:#5B6573;margin-bottom:10px">Arrástrala para centrar la cara y acércala con la barra (o con dos dedos).</div>' +
+        '<div data-crop="stage" style="position:relative;width:' + SZ + 'px;height:' + SZ + 'px;overflow:hidden;border-radius:10px;background:#E3E7EC;touch-action:none;cursor:grab;margin:0 auto">' +
+        '<img data-crop="img" alt="" draggable="false" style="position:absolute;left:0;top:0;max-width:none;user-select:none;-webkit-user-drag:none;transform-origin:0 0">' +
+        '<div style="position:absolute;inset:0;border-radius:50%;box-shadow:0 0 0 999px rgba(17,20,24,.45);pointer-events:none"></div></div>' +
+        '<label style="display:flex;align-items:center;gap:10px;margin:12px 0 4px;font-size:13px"><span aria-hidden="true">−</span><input data-crop="zoom" type="range" min="1" max="4" step="0.01" value="1" style="flex:1" aria-label="Acercar"><span aria-hidden="true">+</span></label>' +
+        '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px"><button type="button" class="btn" data-crop="no">Cancelar</button><button type="button" class="btn primary" data-crop="ok">Usar esta foto</button></div></div>';
+      document.body.appendChild(ov);
+      const q = (k) => ov.querySelector('[data-crop="' + k + '"]');
+      const im = q('img'), st = q('stage'), zr = q('zoom');
+      im.src = img.src;
+      const clamp = () => {
+        const s = base * z, mx = Math.max(0, (iw * s - SZ) / 2), my = Math.max(0, (ih * s - SZ) / 2);
+        ox = Math.max(-mx, Math.min(mx, ox)); oy = Math.max(-my, Math.min(my, oy));
+      };
+      const draw = () => {
+        clamp();
+        const s = base * z, x0 = SZ / 2 + ox - iw * s / 2, y0 = SZ / 2 + oy - ih * s / 2;
+        im.style.width = iw + 'px'; im.style.height = ih + 'px';
+        im.style.transform = 'translate(' + x0 + 'px,' + y0 + 'px) scale(' + s + ')';
+      };
+      const done = (ok) => {
+        let r = null;
+        if (ok) { clamp(); const s = base * z; const side = SZ / s; r = { sx: (iw * s / 2 - ox - SZ / 2) / s, sy: (ih * s / 2 - oy - SZ / 2) / s, side: side }; r.sx = Math.max(0, Math.min(iw - side, r.sx)); r.sy = Math.max(0, Math.min(ih - side, r.sy)); }
+        document.removeEventListener('keydown', onKey, true);
+        ov.remove();
+        resolve(r);
+      };
+      const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); done(false); } else if (e.key === 'Enter') { e.preventDefault(); done(true); } };
+      document.addEventListener('keydown', onKey, true);
+      // Un dedo (o el ratón) mueve la foto; dos dedos la acercan o la alejan (pellizco)
+      const pts = new Map();
+      let drag = null, pinch = null;
+      const dist = () => { const p = Array.from(pts.values()); return Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y) || 1; };
+      st.addEventListener('pointerdown', (e) => {
+        pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); st.setPointerCapture(e.pointerId); e.preventDefault();
+        if (pts.size === 2) { drag = null; pinch = { d: dist(), z: z, ox: ox, oy: oy }; }
+        else if (pts.size === 1) { drag = { x: e.clientX, y: e.clientY, ox: ox, oy: oy }; st.style.cursor = 'grabbing'; }
+      });
+      st.addEventListener('pointermove', (e) => {
+        if (!pts.has(e.pointerId)) return;
+        pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (pinch && pts.size >= 2) { const nz = Math.max(1, Math.min(4, pinch.z * dist() / pinch.d)); const k = nz / pinch.z; z = nz; ox = pinch.ox * k; oy = pinch.oy * k; zr.value = z; draw(); }
+        else if (drag) { ox = drag.ox + e.clientX - drag.x; oy = drag.oy + e.clientY - drag.y; draw(); }
+      });
+      const up = (e) => {
+        pts.delete(e.pointerId);
+        if (pts.size < 2) pinch = null;
+        if (pts.size === 1) { const p = Array.from(pts.values())[0]; drag = { x: p.x, y: p.y, ox: ox, oy: oy }; } else if (!pts.size) { drag = null; st.style.cursor = 'grab'; }
+      };
+      st.addEventListener('pointerup', up); st.addEventListener('pointercancel', up);
+      st.addEventListener('wheel', (e) => { e.preventDefault(); z = Math.max(1, Math.min(4, z * (e.deltaY < 0 ? 1.08 : 1 / 1.08))); zr.value = z; draw(); }, { passive: false });
+      zr.addEventListener('input', () => { const k = Number(zr.value) / z; z = Number(zr.value); ox *= k; oy *= k; draw(); });
+      q('no').addEventListener('click', () => done(false));
+      q('ok').addEventListener('click', () => done(true));
+      ov.addEventListener('click', (e) => { if (e.target === ov) done(false); });
+      draw();
+      q('ok').focus();
+    });
+  }
+  /** Lee la foto, deja encuadrarla (cuadrada) y la reduce (máx. 256 px, JPEG). null = cancelado. */
   function shrinkImage(file) {
     return new Promise((resolve, reject) => {
       const rd = new FileReader();
@@ -508,16 +607,18 @@
         const img = new Image();
         img.onerror = () => reject(new Error('Ese archivo no es una imagen.'));
         img.onload = () => {
-          const side = Math.min(img.width, img.height), sx = (img.width - side) / 2, sy = (img.height - side) / 2;
-          let size = 256, q = 0.82, out = '';
-          for (let i = 0; i < 5; i++) {
-            const c = document.createElement('canvas'); c.width = size; c.height = size;
-            c.getContext('2d').drawImage(img, sx, sy, side, side, 0, 0, size, size);
-            out = c.toDataURL('image/jpeg', q);
-            if (out.length < 40000) break;
-            size = Math.round(size * 0.8); q -= 0.08;
-          }
-          resolve(out);
+          cropUI(img).then((cr) => {
+            if (!cr) { resolve(null); return; }
+            let size = 256, q = 0.82, out = '';
+            for (let i = 0; i < 5; i++) {
+              const c = document.createElement('canvas'); c.width = size; c.height = size;
+              c.getContext('2d').drawImage(img, cr.sx, cr.sy, cr.side, cr.side, 0, 0, size, size);
+              out = c.toDataURL('image/jpeg', q);
+              if (out.length < 40000) break;
+              size = Math.round(size * 0.8); q -= 0.08;
+            }
+            resolve(out);
+          });
         };
         img.src = rd.result;
       };
@@ -785,13 +886,14 @@
       const inp = ev.target, f = inp.files && inp.files[0];
       if (!f) return;
       const lbl = inp.parentNode.querySelector('span:last-child'); if (lbl) lbl.textContent = 'Subiendo…';
-      prepFile(f).then((adj) => call('portalJustUpload', S.sesion, inp.dataset.id, 'asist', adj)).then((d) => { S.d = d; render(); toast('¡Gracias! Justificante entregado.'); })
-        .catch((e) => { if (lbl) lbl.textContent = 'Subir justificante de asistencia'; fail(e); });
+      const ref = inp.dataset.ref === 'aus' ? 'aus' : 'sol';
+      prepFile(f).then((adj) => call('portalJustUpload', S.sesion, inp.dataset.id, 'asist', adj, ref)).then((d) => { S.d = d; render(); toast('¡Gracias! Justificante entregado.'); })
+        .catch((e) => { if (lbl) lbl.textContent = ref === 'aus' ? 'Subir justificante' : 'Subir justificante de asistencia'; fail(e); });
     }
     if (ev.target.dataset && ev.target.dataset.on === 'meFoto') {
       const f = ev.target.files && ev.target.files[0]; if (!f) return;
       const lbl = $('#mdFotoTxt'); if (lbl) lbl.textContent = 'Subiendo…';
-      shrinkImage(f).then((data) => call('portalSaveFoto', S.sesion, data)).then((data) => { S.foto = data; render(); toast('¡Foto cambiada! Ya sale en tu ficha.'); })
+      shrinkImage(f).then((data) => data ? call('portalSaveFoto', S.sesion, data).then((d2) => { S.foto = d2; render(); toast('¡Foto cambiada! Ya sale en tu ficha.'); }) : (ev.target.value = '', lbl && (lbl.textContent = S.foto ? 'Cambiar mi foto' : 'Hacer o elegir una foto')))
         .catch((e) => { if (lbl) lbl.textContent = S.foto ? 'Cambiar mi foto' : 'Hacer o elegir una foto'; fail(e); });
     }
     if (ev.target.dataset && ev.target.dataset.on === 'docUp') {
