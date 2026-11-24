@@ -251,7 +251,7 @@
     const wk = d.horarios.find((w) => { const a = dayOfWeek(w.anio, w.semana, 0), b = dayOfWeek(w.anio, w.semana, 6); return a <= today && today < new Date(b.getTime() + 864e5); });
     const weekH = wk && wk.items ? wk.items.reduce((t, it) => t + (it[2] - it[1]) / 60, 0) : null;
     const sinFirmar = d.horarios.filter((w) => !w.firmado);
-    const resueltas = d.solicitudes.filter((s) => (s.estado === 'APROBADA' || s.estado === 'RECHAZADA') && s.resuelto && (Date.now() - new Date(s.resuelto.replace(' ', 'T')).getTime()) < 14 * 864e5);
+    const resueltas = d.solicitudes.filter((s) => (s.estado === 'APROBADA' || s.estado === 'RECHAZADA' || (s.estado === 'ANULADA' && /^Anulada por la coordinación/.test(s.comentario || ''))) && s.resuelto && (Date.now() - new Date(s.resuelto.replace(' ', 'T')).getTime()) < 14 * 864e5);
     let h = '<h1>Hola, ' + esc(me.nombre) + '</h1><p class="muted small" style="margin:0 0 14px">' + esc(me.centro) + '</p>';
     const dr = d.docs ? d.docs.resumen : null;
     if (dr && dr.firmar) h += '<button type="button" class="banner warn" style="display:block;width:100%;text-align:left;border:0;cursor:pointer" data-act="go" data-v="docs">Tienes <b>' + dr.firmar + ' documento' + (dr.firmar > 1 ? 's' : '') + ' para firmar</b>. Toca para leerlo y firmarlo ›</button>';
@@ -261,7 +261,7 @@
     sinFirmar.forEach((w) => { h += '<button type="button" class="banner warn" style="display:block;width:100%;text-align:left;border:0;cursor:pointer" data-act="openWeek" data-id="' + esc(w.id) + '">Tienes el horario de la <b>' + wtag(w.semana) + '</b> (' + weekRange(w.anio, w.semana) + ') sin firmar. Toca para verlo y firmarlo ›</button>'; });
     const jaP = (S.d.justAus || []).filter((x) => !x.entregado).length;
     if (jaP) h += '<button type="button" class="banner warn" style="display:block;width:100%;text-align:left;border:0;cursor:pointer" data-act="go" data-v="ausencias">Tu coordinador te pide <b>' + (jaP === 1 ? 'un justificante' : jaP + ' justificantes') + '</b>. Toca para subirlo ›</button>';
-    resueltas.forEach((s) => { const m = motivo(s.tipo); h += '<div class="banner ' + (s.estado === 'APROBADA' ? 'ok' : 'err') + '">' + (s.estado === 'APROBADA' ? 'Te han aprobado ' : 'No te han aprobado ') + esc(m.nombre.toLowerCase()) + ' (' + fdate(s.desde) + (s.hasta !== s.desde ? ' – ' + fdate(s.hasta) : '') + ').' + (s.comentario ? ' «' + esc(s.comentario) + '»' : '') + '</div>'; });
+    resueltas.forEach((s) => { const m = motivo(s.tipo); h += '<div class="banner ' + (s.estado === 'APROBADA' ? 'ok' : 'err') + '">' + (s.estado === 'APROBADA' ? 'Te han aprobado ' : (s.estado === 'ANULADA' ? 'La coordinación ha anulado tus ' : 'No te han aprobado ')) + esc(m.nombre.toLowerCase()) + ' (' + fdate(s.desde) + (s.hasta !== s.desde ? ' – ' + fdate(s.hasta) : '') + ').' + (s.comentario ? ' «' + esc(s.comentario) + '»' : '') + '</div>'; });
     if (hoy.length) h += '<div class="card"><div class="small muted" style="font-weight:600">Hoy</div>' + shiftRows(hoy) + '</div>';
     h += '<div class="card"><div class="small muted" style="font-weight:600">' + (next ? 'Próximo turno · ' + (nextK === iso(new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1)) ? 'mañana, ' : '') + DIAS[(new Date(nextK + 'T12:00:00').getDay() + 6) % 7].toLowerCase() + ' ' + fdate(nextK) : 'Próximo turno') + '</div>' +
       (next ? shiftRows(next) : '<p class="small muted" style="margin:8px 0 0">No tienes turnos en los horarios que te han enviado. Cuando te llegue el de la semana que viene, aparecerá aquí.</p>') + '</div>';
@@ -300,6 +300,9 @@
     const d = S.d, s = d.saldo;
     let h = '<h1>Vacaciones y permisos</h1><p class="muted small" style="margin:0 0 12px">Lo que te queda en ' + s.anio + '. Lo disfrutado sale de tus horarios.</p>' +
       '<div class="kpis">' + saldoCard('Vacaciones', s.vac, 'días') + saldoCard('Asuntos propios', s.ap, 'jornadas') + '</div>' +
+      (s.otro_anio || []).map((o) => '<div class="banner warn" style="margin:0 0 10px">' + (o.tipo === 'mas'
+        ? '<b>+' + fmtH(o.dias) + ' días disfrutados en ' + o.anio + '</b> (' + fdate(o.desde) + (o.hasta !== o.desde ? ' – ' + fdate(o.hasta) : '') + ') cuentan como tus vacaciones de ' + s.anio + '.'
+        : '<b>' + fmtH(o.dias) + ' días</b> (' + fdate(o.desde) + (o.hasta !== o.desde ? ' – ' + fdate(o.hasta) : '') + ') cuentan como tus vacaciones de ' + o.anio + ', no de ' + s.anio + '.') + '</div>').join('') +
       '<button class="btn primary block" type="button" data-act="go" data-v="pedir">Pedir vacaciones o un permiso</button>';
     const ja = d.justAus || [];
     if (ja.length) {
@@ -311,7 +314,7 @@
           '<div class="banner warn" style="margin:8px 0 0">Tu coordinador apuntó esta ausencia. Sube el <b>justificante</b> (una foto vale).</div>' +
           '<label class="filebtn" style="margin-top:8px"><input type="file" accept="image/*,application/pdf" data-on="justAsist" data-ref="aus" data-id="' + esc(x.id) + '"><span class="fic" aria-hidden="true">📎</span><span>Subir justificante</span></label>') + '</div>').join('');
     }
-    if (d.previstas.length) h += '<h2>Aprobadas próximamente</h2>' + d.previstas.map((a) => { const m = motivo(a.tipo); return '<div class="card" style="padding:12px 14px"><span class="mdot" style="background:' + esc(m.color) + '"></span><b>' + esc(m.nombre) + '</b> · ' + fdate(a.desde) + (a.hasta !== a.desde ? ' – ' + fdate(a.hasta) : '') + (a.hora_desde ? ' · de ' + a.hora_desde.replace(/^0/, '') + ' a ' + a.hora_hasta.replace(/^0/, '') : '') + '</div>'; }).join('');
+    if (d.previstas.length) h += '<h2>Aprobadas próximamente</h2>' + d.previstas.map((a) => { const m = motivo(a.tipo); return '<div class="card" style="padding:12px 14px"><span class="mdot" style="background:' + esc(m.color) + '"></span><b>' + esc(m.nombre) + '</b>' + (a.cuenta_anio ? ' <span class="pill warn">Cuentan en ' + a.cuenta_anio + '</span>' : '') + ' · ' + fdate(a.desde) + (a.hasta !== a.desde ? ' – ' + fdate(a.hasta) : '') + (a.hora_desde ? ' · de ' + a.hora_desde.replace(/^0/, '') + ' a ' + a.hora_hasta.replace(/^0/, '') : '') + '</div>'; }).join('');
     h += '<h2>Mis solicitudes</h2>';
     h += d.solicitudes.length ? d.solicitudes.map((x) => {
       const m = motivo(x.tipo);
@@ -340,15 +343,25 @@
     return (l.length === 1 ? 'el festivo del ' : 'los festivos del ') + (t.length > 1 ? t.slice(0, -1).join(', ') + ' y ' + t[t.length - 1] : t[0]);
   }
   /** Días que cuenta: en laborables, sin sábados, domingos ni festivos del centro (igual que el gestor). */
-  function countDays(a, b, unidad) {
-    let n = 0;
+  function countDays(a, b, unidad, porSemanas) {
     const fest = new Set(S.d.festivos || []);
+    const set = new Set(), conLab = new Set(), finde = [];
+    const lunes = (t) => t.getTime() - ((t.getDay() + 6) % 7) * 864e5;
     for (let t = new Date(a + 'T12:00:00'), e = new Date(b + 'T12:00:00'); t <= e; t = new Date(t.getTime() + 864e5)) {
       const wd = t.getDay();
-      if (unidad === 'DIAS_LAB' && (wd === 0 || wd === 6 || fest.has(iso(t)))) continue;
-      n++;
+      if (unidad === 'DIAS_LAB' && (wd === 0 || wd === 6)) { finde.push(lunes(t)); continue; }
+      if (unidad === 'DIAS_LAB' && fest.has(iso(t))) continue;
+      set.add(iso(t)); conLab.add(lunes(t));
     }
-    return n;
+    // Vacaciones: si en una semana solo coges sábado y/o domingo, cuenta la semana entera (de lunes a viernes)
+    let semanas = 0;
+    if (porSemanas && unidad === 'DIAS_LAB') new Set(finde).forEach((l) => {
+      if (conLab.has(l)) return;
+      semanas++;
+      for (let i = 0; i < 5; i++) { const d = iso(new Date(l + i * 864e5)); if (!fest.has(d)) set.add(d); }
+    });
+    countDays.semanas = semanas;
+    return set.size;
   }
   function vPedir() {
     S.adj = null;
@@ -394,7 +407,8 @@
     if (a.value && (!b.value || b.value < a.value)) b.value = a.value;
     const h0 = horas ? $('#rqH0').value : '', h1 = horas ? $('#rqH1').value : '';
     const hrs = horas && h0 && h1 && h1 > h0 ? (Number(h1.slice(0, 2)) * 60 + Number(h1.slice(3)) - Number(h0.slice(0, 2)) * 60 - Number(h0.slice(3))) / 60 : 0;
-    const n = horas ? (hrs ? (m.unidad === 'HORAS' ? hrs : 1) : 0) : (a.value && b.value ? countDays(a.value, b.value, m.unidad) : 0);
+    const n = horas ? (hrs ? (m.unidad === 'HORAS' ? hrs : 1) : 0) : (a.value && b.value ? countDays(a.value, b.value, m.unidad, m.grupo === 'VAC') : 0);
+    const semFinde = horas ? 0 : (countDays.semanas || 0);
     let q = quedan(m);
     const E = S.rqEdit ? S.d.solicitudes.find((x) => x.id === S.rqEdit) : null;
     if (E && q !== null) { const me = S.d.motivos.find((x) => x.id === E.tipo); if (me && (me.id === m.id || (me.grupo && me.grupo === m.grupo))) q += Number(E.dias) || 0; }
@@ -407,6 +421,7 @@
     else {
       txt = horas ? 'Es <b>de ' + h0.replace(/^0/, '') + ' a ' + h1.replace(/^0/, '') + '</b> (' + fmtH(hrs) + ' h). Solo esa franja: lo que trabajes antes o después ese día sigue igual.' :
         (n === 1 ? 'Es <b>1 día' : 'Son <b>' + n + ' días') + (m.unidad === 'DIAS_LAB' ? (n === 1 ? ' laborable' : ' laborables') : '') + '</b>' + (m.unidad === 'DIAS_LAB' ? ' (de lunes a viernes' + (festEn(a.value, b.value) ? ', sin contar ' + festEn(a.value, b.value) : '') + ')' : '') + '.';
+      if (semFinde) txt += ' <b>Las vacaciones se cuentan por semanas:</b> si en una semana solo coges el fin de semana, gastas esa semana entera (5 días). Mejor pídelas de lunes a domingo.';
       if (q !== null) {
         if (n > q + 0.001) { ok = false; txt += ' <b>' + (q <= 0 ? 'No te quedan días de ' + esc(m.nombre.toLowerCase()) + ' este año.' : 'Solo te quedan ' + fmtH(q) + '.') + '</b>'; }
         else txt += ' Te quedarían ' + fmtH(q - n) + '.';
